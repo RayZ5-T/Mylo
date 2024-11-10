@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload & Preview</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Upload Your Files</h1>
+
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" name="file" id="fileInput" required>
+            <button type="submit">Upload File</button>
+        </form>
+
+        <h2>Uploaded Files</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>File Name</th>
+                    <th>Upload Date</th>
+                    <th>Preview</th>
+                    <th>Download</th>
+                </tr>
+            </thead>
+            <tbody id="fileList"></tbody>
+        </table>
+    </div>
+
+    <!-- Modal for file preview -->
+    <div id="fileModal" class="modal">
+        <span class="close" id="closeModal">&times;</span>
+        <div id="modalContent"></div>
+    </div>
+
+    <script>
+        // Handle file upload
+        const form = document.getElementById('uploadForm');
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.file) {
+                    alert('File uploaded successfully!');
+                    loadFiles(); // Reload the files after upload
+                } else {
+                    alert('Failed to upload file.');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Error uploading file');
+            });
+        });
+
+        // Fetch and display uploaded files
+        function loadFiles() {
+            fetch('/uploads')
+                .then(response => response.json())
+                .then(files => {
+                    const fileList = document.getElementById('fileList');
+                    fileList.innerHTML = '';
+                    files.forEach(file => {
+                        const row = document.createElement('tr');
+                        const fileExtension = file.name.split('.').pop().toLowerCase();
+                        let filePreview = '';
+
+                        if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
+                            filePreview = `<img src="/uploads/${file.name}" alt="${file.name}" style="max-width: 100px; max-height: 100px;">`;
+                        } else if (fileExtension === 'pdf') {
+                            filePreview = `<iframe src="/uploads/${file.name}" width="100" height="100"></iframe>`;
+                        } else if (['txt', 'md'].includes(fileExtension)) {
+                            filePreview = `<a href="/uploads/${file.name}" target="_blank">View Text File</a>`;
+                        } else if (['mp3', 'wav', 'ogg'].includes(fileExtension)) {
+                            filePreview = `
+                                <audio controls>
+                                    <source src="/uploads/${file.name}" type="audio/${fileExtension}">
+                                    Your browser does not support the audio element.
+                                </audio>`;
+                        } else if (['mp4', 'mov', 'webm'].includes(fileExtension)) {
+                            filePreview = `
+                                <video width="100" height="100" controls>
+                                    <source src="/uploads/${file.name}" type="video/${fileExtension}">
+                                    Your browser does not support the video tag.
+                                </video>`;
+                        } else {
+                            filePreview = '<span>Cannot preview this file type</span>';
+                        }
+
+                        row.innerHTML = `
+                            <td>${file.name}</td>
+                            <td>${new Date(file.uploadDate).toLocaleString()}</td>
+                            <td>${filePreview}</td>
+                            <td><a href="/uploads/${file.name}" download>Download</a></td>
+                        `;
+                        fileList.appendChild(row);
+
+                        // Open file in modal when clicked
+                        row.addEventListener('click', () => openFileInModal(file));
+                    });
+                })
+                .catch(err => {
+                    console.error("Error fetching files:", err);
+                });
+        }
+
+        // Open file in modal
+        function openFileInModal(file) {
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+            const modalContent = document.getElementById('modalContent');
+
+            // Clear previous modal content
+            modalContent.innerHTML = '';
+
+            if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
+                modalContent.innerHTML = `<img src="/uploads/${file.name}" alt="${file.name}" style="width: 100%; max-height: 80vh; object-fit: contain;">`;
+            } else if (fileExtension === 'pdf') {
+                modalContent.innerHTML = `<iframe src="/uploads/${file.name}" width="100%" height="80vh"></iframe>`;
+            } else if (['txt', 'md'].includes(fileExtension)) {
+                fetch(`/uploads/${file.name}`)
+                    .then(response => response.text())
+                    .then(text => {
+                        modalContent.innerHTML = `<pre>${text}</pre>`;
+                    })
+                    .catch(err => console.error("Error loading text file:", err));
+            } else if (['mp3', 'wav', 'ogg'].includes(fileExtension)) {
+                modalContent.innerHTML = `
+                    <audio controls>
+                        <source src="/uploads/${file.name}" type="audio/${fileExtension}">
+                        Your browser does not support the audio element.
+                    </audio>`;
+            } else if (['mp4', 'mov', 'webm'].includes(fileExtension)) {
+                modalContent.innerHTML = `
+                    <video width="100%" height="80vh" controls>
+                        <source src="/uploads/${file.name}" type="video/${fileExtension}">
+                        Your browser does not support the video tag.
+                    </video>`;
+            } else {
+                modalContent.innerHTML = '<span>Cannot preview this file type</span>';
+            }
+
+            document.getElementById('fileModal').style.display = "block";
+        }
+
+        // Close the modal
+        document.getElementById('closeModal').addEventListener('click', () => {
+            document.getElementById('fileModal').style.display = "none";
+        });
+
+        window.addEventListener('click', (event) => {
+            if (event.target === document.getElementById('fileModal')) {
+                document.getElementById('fileModal').style.display = "none";
+            }
+        });
+
+        // Load files when the page loads
+        window.onload = loadFiles;
+    </script>
+</body>
+</html>
